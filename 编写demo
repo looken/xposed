@@ -1,0 +1,123 @@
+1、settings.gradle
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://api.xposed.info/' }  // 添加这一行即可
+    }
+}
+2、app/build.gradle
+dependencies {
+    compileOnly 'de.robv.android.xposed:api:82'
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.lifecycle.runtime.ktx
+    implementation libs.androidx.activity.compose
+    implementation platform(libs.androidx.compose.bom)
+    implementation libs.androidx.ui
+    implementation libs.androidx.ui.graphics
+    implementation libs.androidx.ui.tooling.preview
+    implementation libs.androidx.material3
+    testImplementation libs.junit
+    androidTestImplementation libs.androidx.junit
+    androidTestImplementation libs.androidx.espresso.core
+    androidTestImplementation platform(libs.androidx.compose.bom)
+    androidTestImplementation libs.androidx.ui.test.junit4
+    debugImplementation libs.androidx.ui.tooling
+    debugImplementation libs.androidx.ui.test.manifest
+}
+3、AndroidManifest.xml
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        tools:targetApi="31">
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true"/>
+        <!-- 模块的简介（在框架中显示） -->
+        <meta-data
+            android:name="xposeddescription"
+            android:value="我是Xposed模块简介" />
+        <!-- 模块最低支持的Api版本 一般填54即可 -->
+        <meta-data
+            android:name="xposedminversion"
+            android:value="54"/>
+        <!-- 模块作用域 -->
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposedscope"/>
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.LSP_KT">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+4、res/values/arrays.xml
+<resources>
+    <string-array name="xposedscope" >
+        <!-- 这里填写模块的作用域应用的包名，可以填多个。 -->
+        <item>me.kyuubiran.xposedapp</item>
+    </string-array>
+</resources>
+5、assets/xposed_init
+com.example.lsp_kt.MainHook
+6、java/com.example.lsp_kt.MainHook.kt
+package com.example.lsp_kt
+
+import android.app.Activity
+import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
+import de.robv.android.xposed.IXposedHookLoadPackage
+import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XposedHelpers
+import de.robv.android.xposed.callbacks.XC_LoadPackage
+
+class MainHook : IXposedHookLoadPackage {
+    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+        // 过滤不必要的应用
+        Log.d("TAG", lpparam.packageName);
+        if (lpparam.packageName != "me.kyuubiran.xposedapp") return
+        // 执行Hook
+        hook(lpparam)
+    }
+
+    private fun hook(lpparam: XC_LoadPackage.LoadPackageParam) {
+        // 它有两个重载，区别是一个是填Class，一个是填ClassName以及ClassLoader
+        // 第一种 填ClassName
+        Log.d("TAG2", lpparam.packageName);
+        XposedHelpers.findAndHookMethod(
+            "me.kyuubiran.xposedapp.Guess",
+            lpparam.classLoader,
+            "isDraw",
+            Int::class.java,
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    // 首先 我们要拿到他的字段
+                    val fAnswer = param.thisObject.javaClass.getDeclaredField("answer")
+                    // 并且让它可访问 否则会报非法访问的错误
+                    fAnswer.isAccessible = true
+                    // 根据猜拳应用的逻辑 0是石头 1是剪刀 2是布
+                    val win = when (param.args[0] as Int) { // 首先我们拿到方法的第一个参数 他是Int类型 就是我们的出拳
+                        0 -> 1         // 石头->剪刀
+                        1 -> 2         // 剪刀->布
+                        2 -> 0         // 布->石头
+                        else -> 0
+                    }
+                    // 最后设置answer的值让对手根据我们的出拳来“演戏”
+                    fAnswer.set(param.thisObject, win)
+                }
+            })
+    }
+}
