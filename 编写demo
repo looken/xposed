@@ -1,3 +1,7 @@
+AndroidStdio版本：android-studio-2023.2.1.23-windows.exe
+
+
+
 1、settings.gradle
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
